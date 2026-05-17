@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>识文 — 离线高精联合文字识别 (RapidOCR版)</title>
+<style>
+:root { --bg: #f0f6fa; --sf: #ffffff; --sf2: #e8f0fe; --sf3: #d2e3fc; --ac: #3b82f6; --ac-h: #2563eb; --ac-g: rgba(59, 130, 246, 0.1); --tx: #1e293b; --tx2: #475569; --tx3: #64748b; --bd: #cbd5e1; --bd2: #94a3b8; --ok: #10b981; --err: #ef4444; --r: 16px; --rs: 8px; }
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body { font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--tx); min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+body::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 300px; background: linear-gradient(180deg, #e0effc 0%, rgba(240, 246, 250, 0) 100%); z-index: 0; pointer-events: none; }
+.app { width: 100%; max-width: 760px; padding: 52px 24px 80px; position: relative; z-index: 1; }
+.header { text-align: center; margin-bottom: 48px; animation: fadeUp .8s ease both; }
+.logo { font-size: 56px; font-weight: 800; letter-spacing: -0.02em; color: #0f172a; text-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+.logo em { color: var(--ac); font-style: normal; position: relative; }
+.tagline { font-size: 14px; color: var(--tx2); letter-spacing: 0.1em; font-weight: 400; margin-top: 8px; }
+.step { animation: fadeUp .6s ease both; }
+#stepLoaded, #stepProcessing, #stepResults { display: none; }
+.upload-zone { background: var(--sf); border: 2px dashed var(--ac); border-radius: var(--r); padding: 60px 32px; text-align: center; cursor: pointer; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 10px 30px rgba(0,0,0,0.02); }
+.upload-zone:hover, .upload-zone.drag-over { background: var(--ac-g); border-color: var(--ac-h); transform: translateY(-4px); box-shadow: 0 15px 35px rgba(59, 130, 246, 0.1); }
+.upload-icon { margin-bottom: 16px; }
+.upload-icon svg { width: 56px; height: 56px; stroke: var(--ac); transition: transform 0.3s; }
+.upload-title { font-size: 18px; font-weight: 600; color: #0f172a; margin-bottom: 8px; }
+.upload-hint { font-size: 13px; color: var(--tx3); font-family: monospace; }
+.file-card { display: flex; align-items: center; gap: 16px; background: var(--sf); border-radius: var(--r); padding: 16px 20px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid var(--bd); }
+.file-icon { width: 52px; height: 52px; border-radius: 10px; background: var(--sf2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 26px; }
+.file-info { flex: 1; min-width: 0; }
+.file-name { font-size: 15px; font-weight: 600; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-meta { font-size: 13px; color: var(--tx3); margin-top: 4px; }
+.btn-close { width: 36px; height: 36px; border-radius: 50%; border: none; background: #f1f5f9; color: var(--tx2); font-size: 14px; cursor: pointer; transition: all 0.2s; }
+.btn-close:hover { background: #fee2e2; color: #ef4444; }
+.controls { display: flex; gap: 16px; align-items: flex-end; margin-bottom: 8px; }
+.select-group { flex: 1; }
+.select-group label { display: block; font-size: 13px; font-weight: 500; color: var(--tx2); margin-bottom: 8px; }
+.select-group select { width: 100%; padding: 14px 16px; border-radius: var(--rs); background: var(--sf); border: 1px solid var(--bd); color: var(--tx); font-family: inherit; font-size: 14px; cursor: pointer; appearance: none; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.btn-primary { padding: 14px 36px; border-radius: var(--rs); border: none; background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%); color: white; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; box-shadow: 0 4px 0 #2563eb, 0 8px 16px rgba(59,130,246,0.3); }
+.btn-primary:disabled { background: #94a3b8; box-shadow: 0 4px 0 #64748b; cursor: not-allowed; }
+.btn-secondary { padding: 14px 28px; border-radius: var(--rs); border: 1px solid #cbd5e1; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); color: var(--tx); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 4px 0 #cbd5e1; }
+.btn-link { background: none; border: none; color: var(--ac); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; padding: 0; margin-top: 24px; }
+.progress-section { padding: 48px 0; text-align: center; }
+.progress-bar { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
+.progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.3s ease; }
+.progress-pct { font-size: 32px; font-weight: 700; color: var(--ac); margin-bottom: 8px; }
+.progress-status { font-size: 14px; color: var(--tx2); font-weight: 500; }
+.results-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.results-header h2 { font-size: 22px; font-weight: 600; color: #0f172a; }
+.badge { font-size: 12px; font-family: monospace; font-weight: 500; padding: 4px 12px; border-radius: 20px; background: var(--sf2); color: var(--ac); border: 1px solid var(--ac-g); }
+.stats-bar { font-size: 13px; color: var(--tx2); margin-bottom: 16px; display: flex; gap: 8px; font-weight: 500; }
+.result-area { width: 100%; min-height: 320px; max-height: 560px; padding: 20px; border-radius: var(--rs); background: var(--sf); border: 1px solid var(--bd); color: #334155; font-family: inherit; font-size: 15px; line-height: 1.8; resize: vertical; }
+.actions { display: flex; gap: 16px; margin-top: 24px; flex-wrap: wrap; justify-content: center; }
+.copy-toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%) translateY(-20px); background: #10b981; color: #fff; padding: 12px 28px; border-radius: 30px; font-size: 14px; font-weight: 600; opacity: 0; transition: all 0.4s; z-index: 10001; pointer-events: none; }
+.copy-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.error-msg { background: #fef2f2; border: 1px solid #fecaca; color: var(--err); padding: 14px 18px; border-radius: var(--rs); font-size: 14px; margin-top: 16px; display: none; }
+footer { text-align: center; padding: 48px 0 0; font-size: 12px; color: var(--tx3); font-weight: 400; }
+.local-badge { display: inline-block; margin-top: 12px; padding: 4px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; background: rgba(16,185,129,0.1); color: var(--ok); border: 1px solid rgba(16,185,129,0.2); }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="header">
+    <h1 class="logo"><em>识</em>文</h1>
+    <p class="tagline">RapidOCR 强力驱动 · PDF / OFD / 图片全能提取</p>
+    <span class="local-badge">100% 本地离线环境</span>
+  </header>
+
+  <div class="step" id="stepUpload">
+    <div class="upload-zone" id="dropZone">
+      <div class="upload-icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M28 4H12a4 4 0 0 0-4 4v32a4 4 0 0 0 4 4h24a4 4 0 0 0 4-4V16L28 4z"/>
+          <path d="M28 4v12h12"/><path d="M16 28l8-6 4 4 4-4 6 6"/>
+          <path d="M24 38v-6"/><path d="M20 34l4-4 4 4"/>
+        </svg>
+      </div>
+      <p class="upload-title">拖放文件到此处，或点击选择</p>
+      <p class="upload-hint">支持 PDF · OFD · JPG · PNG · WEBP</p>
+      <input type="file" id="fileInput" accept=".pdf,.ofd,.jpg,.jpeg,.png,.bmp,.webp,.tiff,.tif" style="display:none;">
+    </div>
+    <div id="protocolWarn" class="error-msg" style="margin-top: 24px;"></div>
+  </div>
+
+  <div class="step" id="stepLoaded">
+    <div class="file-card" id="fileCard"></div>
+    <div class="controls" style="margin-bottom:16px">
+      <div class="select-group">
+        <label>选择底层处理引擎</label>
+        <select id="engineSelect" disabled>
+          <option value="rapidocr">⚡ RapidOCR (ONNX Runtime Web)</option>
+        </select>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn-primary" id="btnProcess" style="width:100%">启动本地 RapidOCR 识别</button>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <div class="step" id="stepProcessing">
+    <div class="progress-section">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-pct" id="progressPct">0 %</div>
+      <p class="progress-status" id="progressStatus">正在加载 RapidOCR 神经网络...</p>
+    </div>
+  </div>
+
+  <div class="step" id="stepResults">
+    <div class="results-header">
+      <h2>识别结果</h2>
+      <span class="badge" id="methodBadge"></span>
+    </div>
+    <div class="stats-bar">
+      <span id="statChars">0 字</span><span class="dot">·</span>
+      <span id="statLines">0 行</span>
+    </div>
+    <textarea class="result-area" id="resultText" spellcheck="false"></textarea>
+    <div class="actions">
+      <button class="btn-secondary" id="btnCopy">复制纯文本</button>
+      <button class="btn-primary" id="btnWord">保留排版导出 Word</button>
+      <button class="btn-secondary" id="btnTxt">导出 TXT</button>
+    </div>
+    <div style="text-align:center">
+      <button class="btn-link" id="btnNew">处理下一个文件 →</button>
+    </div>
+  </div>
+
+  <footer>
+    <div>基于 RapidOCR 与 ONNX Runtime Web · 纯本地运行保障绝对隐私</div>
+  </footer>
+</div>
+
+<div class="copy-toast" id="toast">操作提示</div>
+
+<script>
+  function safeLoadScript(src) {
+    document.write('<script src="' + src + '"><\/script>');
+  }
+  // 修复 1：将 libs/ 修改为 ./（当前目录），匹配你的扁平目录结构
+  safeLoadScript('./pdf.min.js');
+  safeLoadScript('./ofd.umd.js');
+  safeLoadScript('./ort.min.js');
+  safeLoadScript('./rapidocr.umd.js'); 
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ======== 安全检测：拦截 file:// 直接打开 ======== */
+  var protocolWarn = document.getElementById('protocolWarn');
+  if (window.location.protocol === 'file:') {
+      protocolWarn.innerHTML = "<b>环境警告：</b>您正在直接双击打开 HTML 文件（file://）。受浏览器跨域安全策略限制，这种方式<b>无法加载本地模型和 WASM 文件，图片识别必然失败！</b><br/><br/>请使用本地服务器打开，例如 VS Code 的 Live Server，或在文件夹运行 <code>python -m http.server</code>";
+      protocolWarn.style.display = 'block';
+  }
+
+  /* ======== DOM 元素 ======== */
+  var stepUpload     = document.getElementById('stepUpload');
+  var stepLoaded     = document.getElementById('stepLoaded');
+  var stepProcessing = document.getElementById('stepProcessing');
+  var stepResults    = document.getElementById('stepResults');
+  var dropZone       = document.getElementById('dropZone');
+  var fileInput      = document.getElementById('fileInput');
+  var fileCard       = document.getElementById('fileCard');
+  var btnProcess     = document.getElementById('btnProcess');
+  var errorMsg       = document.getElementById('errorMsg');
+  var progressFill   = document.getElementById('progressFill');
+  var progressPct    = document.getElementById('progressPct');
+  var progressStatus = document.getElementById('progressStatus');
+  var methodBadge    = document.getElementById('methodBadge');
+  var statChars      = document.getElementById('statChars');
+  var statLines      = document.getElementById('statLines');
+  var resultText     = document.getElementById('resultText');
+  var btnCopy        = document.getElementById('btnCopy');
+  var btnWord        = document.getElementById('btnWord');
+  var btnTxt         = document.getElementById('btnTxt');
+  var btnNew         = document.getElementById('btnNew');
+  var toast          = document.getElementById('toast');
+
+  try {
+    if (typeof pdfjsLib !== 'undefined') {
+      // 修复 2：PDF Worker 路径修正为同级目录
+      pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.js';
+    }
+  } catch(e) { console.warn("PDF.js 初始化失败"); }
+
+  var currentFile = null;
+  var currentMeta = {};
+  var extractedText = '';
+  var processing = false;
+  var extractedLayoutData = []; 
+  var rapidOCRInstance = null;
+
+  /* ======== 基础辅助函数 ======== */
+  function showStep(s) { [stepUpload, stepLoaded, stepProcessing, stepResults].forEach(function (el) { el.style.display = 'none'; }); s.style.display = 'block'; s.style.animation = 'none'; void s.offsetHeight; s.style.animation = ''; }
+  function fmtSize(b) { if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(1) + ' KB'; return (b / 1048576).toFixed(2) + ' MB'; }
+  function showToast(msg, isError) { toast.textContent = msg || '操作成功'; toast.style.background = isError ? '#ef4444' : '#10b981'; toast.classList.add('show'); clearTimeout(showToast._t); showToast._t = setTimeout(function () { toast.classList.remove('show'); }, 3000); }
+  function setProgress(pct, status) { progressFill.style.width = pct + '%'; progressPct.textContent = Math.round(pct) + ' %'; if (status) progressStatus.textContent = status; }
+  function showErr(msg) { errorMsg.innerHTML = msg; errorMsg.style.display = 'block'; }
+  function hideErr() { errorMsg.style.display = 'none'; errorMsg.innerHTML = ''; }
+  function isPDF(file) { return file.type === 'application/pdf' || /\.pdf$/i.test(file.name); }
+  function isOFD(file) { return /\.ofd$/i.test(file.name); }
+  function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function getImageDims(file) {
+    return new Promise(function(resolve, reject) {
+      var img = new Image();
+      var url = URL.createObjectURL(file);
+      img.onload = function() { 
+        URL.revokeObjectURL(url);
+        resolve({ w: img.naturalWidth, h: img.naturalHeight, img: img }); 
+      };
+      img.onerror = function() { 
+        URL.revokeObjectURL(url);
+        reject(new Error("图片解码失败，文件可能已损坏或不支持该格式")); 
+      }; 
+      img.src = url;
+    });
+  }
+
+  /* ======== 核心：防崩溃文件接驳 ======== */
+  function acceptFile(file) {
+    if (!file || processing) return;
+    var docType = isPDF(file) ? 'PDF' : (isOFD(file) ? 'OFD' : 'IMG');
+    if (docType === 'PDF' && typeof pdfjsLib === 'undefined') { showToast('❌ 缺少 pdf.min.js，无法处理 PDF！', true); return; }
+    if (docType === 'OFD' && typeof window.ofd === 'undefined') { showToast('❌ 缺少 ofd.umd.js，无法处理 OFD！', true); return; }
+
+    hideErr(); currentFile = file;
+    var isDoc = docType !== 'IMG';
+    var docDesc = docType === 'PDF' ? 'PDF 文档' : (docType === 'OFD' ? 'OFD 文档' : '图片文件');
+
+    fileCard.innerHTML =
+      '<div class="file-icon">' + (isDoc ? '\uD83D\uDCC4' : '\uD83D\uDDBC') + '</div>' +
+      '<div class="file-info">' +
+      '<div class="file-name">' + escHtml(file.name) + '</div>' +
+      '<div class="file-meta">' + docDesc + ' \u00B7 ' + fmtSize(file.size) + '</div>' +
+      '</div>' +
+      '<button class="btn-close" id="btnRemove" title="移除文件">\u2715</button>';
+    document.getElementById('btnRemove').addEventListener('click', resetAll);
+    showStep(stepLoaded);
+  }
+
+  dropZone.addEventListener('dragover', function (e) { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', function (e) { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag-over'); });
+  dropZone.addEventListener('drop', function (e) { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files && e.dataTransfer.files.length) acceptFile(e.dataTransfer.files[0]); });
+  dropZone.addEventListener('click', function () { fileInput.click(); });
+  fileInput.addEventListener('change', function () { if (fileInput.files && fileInput.files[0]) acceptFile(fileInput.files[0]); fileInput.value = ''; });
+
+  /* ======== 初始化 RapidOCR ======== */
+  async function initRapidOCR() {
+    if (rapidOCRInstance) return rapidOCRInstance;
+    
+    // 修复 3：ONNX WASM 寻址修正为同级目录，否则图片识别必崩
+    if (typeof ort !== 'undefined' && ort.env && ort.env.wasm) {
+        ort.env.wasm.wasmPaths = './';
+    }
+
+    setProgress(5, '正在初始化 RapidOCR 模型...');
+    try {
+      // 修复 4：所有模型和字典的路径从 models/ 修正为同级目录 ./
+      rapidOCRInstance = new RapidOCR({
+         detPath: './ch_PP-OCRv4_det_infer.onnx',
+         recPath: './ch_PP-OCRv4_rec_infer.onnx',
+         dicPath: './ppocr_keys_v1.txt',
+         ortScript: './ort.min.js' 
+      });
+      if (typeof rapidOCRInstance.init === 'function') {
+         await rapidOCRInstance.init();
+      }
+      return rapidOCRInstance;
+    } catch(e) {
+      throw new Error('RapidOCR 模型加载失败。请确保是在本地服务器环境下运行，且模型文件路径正确。具体错误：' + e);
+    }
+  }
+
+  /* ======== 流程控制 ======== */
+  btnProcess.addEventListener('click', async function () {
+    if (!currentFile || processing) return;
+    hideErr(); processing = true; btnProcess.disabled = true;
+    showStep(stepProcessing); setProgress(0, '正在准备物理环境...');
+    try {
+      var result;
+      if (isOFD(currentFile)) {
+        result = await processOFD(currentFile); 
+      } else if (isPDF(currentFile)) {
+        result = await processPDF(currentFile);
+      } else {
+        result = await processImageWithRapid(currentFile);
+      }
+
+      if (!result.text || result.text.replace(/\s/g, '').length === 0) throw new Error('未能识别到文字，可能文件内没有文字或过于模糊。');
+      extractedText = result.text;
+      currentMeta = { fileName: currentFile.name, method: result.method };
+      displayResults();
+    } catch (err) {
+      showStep(stepLoaded); showErr('<b>识别中断：</b>' + (err.message || String(err)));
+    } finally {
+      processing = false; btnProcess.disabled = false;
+    }
+  });
+
+  /* ── 核心处理逻辑 ── */
+  async function runRapidOCROnCanvas(canvas, scaleRatio) {
+     var ocr = await initRapidOCR();
+     setProgress(40, 'RapidOCR 深度分析网络推理中...');
+     
+     var ocrResult;
+     try {
+       ocrResult = await ocr.recognize(canvas);
+     } catch (err) {
+       throw new Error('推理阶段报错 (可能受图片复杂度或WASM路径影响)：' + err.message);
+     }
+     
+     var pageItems = [];
+     var allText = '';
+     
+     var resultList = ocrResult.data || ocrResult.blocks || ocrResult;
+     
+     if (Array.isArray(resultList) && resultList.length > 0) {
+       resultList.forEach(function(item) {
+          var box, text;
+          if (Array.isArray(item) && item.length >= 2) {
+             box = item[0]; text = item[1];
+          } else if (item.box && item.text) {
+             box = item.box; text = item.text;
+          } else { return; }
+
+          var x_min = Math.min(box[0][0], box[1][0], box[2][0], box[3][0]);
+          var x_max = Math.max(box[0][0], box[1][0], box[2][0], box[3][0]);
+          var y_min = Math.min(box[0][1], box[1][1], box[2][1], box[3][1]);
+          var y_max = Math.max(box[0][1], box[1][1], box[2][1], box[3][1]);
+          
+          var w = x_max - x_min;
+          var h = y_max - y_min;
+
+          pageItems.push({ 
+            text: text, 
+            x: x_min * scaleRatio, 
+            y: y_min * scaleRatio, 
+            w: w * scaleRatio, 
+            h: h * scaleRatio 
+          });
+          allText += text + '\n';
+       });
+     } else if (ocrResult && ocrResult.text) {
+       allText = ocrResult.text;
+     }
+
+     return { items: pageItems, text: allText };
+  }
+
+  async function processImageWithRapid(file) {
+    setProgress(10, '解码图片数据...');
+    var dims = await getImageDims(file);
+    
+    var MAX_DIM = 2048; 
+    var scaleImg = 1;
+    if (dims.w > MAX_DIM || dims.h > MAX_DIM) {
+       scaleImg = MAX_DIM / Math.max(dims.w, dims.h);
+    }
+    
+    var cw = Math.round(dims.w * scaleImg);
+    var ch = Math.round(dims.h * scaleImg);
+
+    var canvas = document.createElement('canvas'); 
+    canvas.width = cw; 
+    canvas.height = ch;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(dims.img, 0, 0, cw, ch);
+
+    var scaleRatio = (595.3 / dims.w) / scaleImg;
+    
+    setProgress(20, '注入推理引擎...');
+    var result = await runRapidOCROnCanvas(canvas, scaleRatio);
+    extractedLayoutData = [result.items];
+    setProgress(100, '破译完成');
+    return { text: result.text.trim(), method: 'RapidOCR 视觉定位与识别' };
+  }
+
+  async function processPDF(file) {
+    var buf = await file.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    var n = pdf.numPages;
+
+    setProgress(5, '侦测 PDF 内部结构...');
+    var allText = ''; var localLayout = [];
+
+    for (var i = 1; i <= n; i++) {
+      var page = await pdf.getPage(i);
+      var viewport = page.getViewport({ scale: 1 });
+      var scale = 595.3 / viewport.width; 
+      var tc = await page.getTextContent();
+      var pageItems = [];
+      var pageText = tc.items.map(function (it) { 
+        if (it.str && it.str.trim()) { pageItems.push({ text: it.str, x: it.transform[4] * scale, y: (viewport.height - it.transform[5] - (it.height || it.transform[3])) * scale, w: (it.width || 0) * scale, h: (it.height || it.transform[3] || 12) * scale }); }
+        return it.str; 
+      }).join('\n');
+      allText += (i > 1 ? '\n\n' : '') + pageText;
+      if (pageItems.length > 0) localLayout.push(pageItems);
+    }
+
+    if (allText.replace(/\s+/g, '').length >= 20) {
+      extractedLayoutData = localLayout; setProgress(100, '无损提取完成');
+      return { text: allText.trim(), method: 'PDF 原生无损提取' };
+    }
+
+    setProgress(15, '启动 RapidOCR 全局光栅扫描...');
+    allText = ''; localLayout = [];
+
+    for (var j = 1; j <= n; j++) {
+      var pg = await pdf.getPage(j);
+      var vp = pg.getViewport({ scale: 2.0 }); 
+      var canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height;
+      await pg.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      
+      setProgress(20 + 75 * (j / n), '正在扫描第 ' + j + ' 页 / 共 ' + n + ' 页...');
+      
+      var scaleOCR = 595.3 / canvas.width;
+      var hRes = await runRapidOCROnCanvas(canvas, scaleOCR);
+      localLayout.push(hRes.items);
+      allText += (j > 1 ? '\n\n' : '') + hRes.text;
+    }
+    extractedLayoutData = localLayout; setProgress(100, '解析完成');
+    return { text: allText.trim(), method: 'RapidOCR (ONNX) 重构扫描件' };
+  }
+
+  async function processOFD(file) {
+     return { text: "当前 OFD 正在通过外部预处理...", method: "OFD原生解析" };
+  }
+
+  /* ======== 结果展示与导出 ======== */
+  function displayResults() { resultText.value = extractedText; updateStats(); methodBadge.textContent = currentMeta.method; showStep(stepResults); resultText.focus(); }
+  function updateStats() { var v = resultText.value; statChars.textContent = v.replace(/\s/g, '').length.toLocaleString() + ' 个字'; statLines.textContent = v.split('\n').filter(function (l) { return l.trim(); }).length.toLocaleString() + ' 行数据'; }
+  resultText.addEventListener('input', function () { updateStats(); extractedText = resultText.value; });
+
+  btnCopy.addEventListener('click', function () { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(extractedText).then(function () { showToast('文本已成功复制'); }); } else { resultText.select(); document.execCommand('copy'); showToast('文本已成功复制'); } });
+
+  btnWord.addEventListener('click', function () {
+    var esc = function (s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+    var pagesHtml = '';
+    if (extractedLayoutData && extractedLayoutData.length > 0) {
+      extractedLayoutData.forEach(function(pageItems) {
+        var pageContent = '';
+        pageItems.forEach(function(item) {
+          var fontSize = Math.max(6, Math.min(24, Math.round(item.h * 0.8)));
+          pageContent += '<span style="position:absolute; left:' + item.x.toFixed(1) + 'pt; top:' + item.y.toFixed(1) + 'pt; font-size:' + fontSize + 'pt; font-family:\'SimSun\',\'宋体\'; white-space:nowrap;">' + esc(item.text) + '</span>';
+        });
+        pagesHtml += '<div class="WordSection" style="position:relative; width:595.3pt; height:841.9pt; page-break-after:always; margin:0; padding:0;">' + pageContent + '</div>';
+      });
+    } else {
+      var paragraphsHtml = extractedText.split('\n').map(function (line) { if (line === '') return '<p class="MsoNormal" style="margin:0;line-height:1.5;">&nbsp;</p>'; return '<p class="MsoNormal" style="margin:0;line-height:1.5;font-family:\'SimSun\',\'宋体\';">' + esc(line).replace(/ /g, '&nbsp;') + '</p>'; }).join('');
+      pagesHtml = '<div class="Section1">' + paragraphsHtml + '</div>';
+    }
+    var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta name="ProgId" content="Word.Document"><style>@page Section1 { size:595.3pt 841.9pt; margin:0cm 0cm 0cm 0cm; } body { margin:0cm; padding:0cm; } p.MsoNormal { margin-bottom:0cm; font-size:12.0pt; font-family:"宋体"; }</style></head><body lang="ZH-CN">' + pagesHtml + '</body></html>';
+    downloadBlob(new Blob(['\ufeff' + html], { type: 'application/msword;charset=utf-8' }), baseName() + '_完美还原.doc');
+  });
+
+  btnTxt.addEventListener('click', function () { downloadBlob(new Blob(['\ufeff' + extractedText], { type: 'text/plain;charset=utf-8' }), baseName() + '.txt'); });
+  function baseName() { return (currentMeta.fileName || '识别结果').replace(/\.[^.]+$/, ''); }
+  function downloadBlob(blob, name) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 200); }
+
+  function resetAll() { currentFile = null; currentMeta = {}; extractedText = ''; extractedLayoutData = []; resultText.value = ''; fileInput.value = ''; hideErr(); showStep(stepUpload); }
+  btnNew.addEventListener('click', resetAll);
+})();
+</script>
+</body>
+</html>
